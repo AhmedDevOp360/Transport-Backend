@@ -33,5 +33,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/move-requests/{id}/applications/{application_id}/status', [MoveRequestController::class, 'updateApplicationStatus']);
 
     Route::get('/active-jobs', [MoveRequestController::class, 'activeJobs']);
+
+    // Driver/Team Management Routes
+    Route::get('/drivers', [\App\Http\Controllers\DriverController::class, 'index']);
+    Route::post('/drivers', [\App\Http\Controllers\DriverController::class, 'store']);
+    Route::get('/drivers/{id}', [\App\Http\Controllers\DriverController::class, 'show']);
+    Route::post('/drivers/{id}', [\App\Http\Controllers\DriverController::class, 'update']);
+    Route::delete('/drivers/{id}', [\App\Http\Controllers\DriverController::class, 'destroy']);
+    Route::post('/drivers/{id}/status', [\App\Http\Controllers\DriverController::class, 'updateStatus']);
+    Route::post('/drivers/{id}/assign-vehicle', [\App\Http\Controllers\DriverController::class, 'assignVehicle']);
+    Route::post('/drivers/{id}/unassign-vehicle', [\App\Http\Controllers\DriverController::class, 'unassignVehicle']);
+    Route::get('/drivers-alerts', [\App\Http\Controllers\DriverController::class, 'getAlerts']);
+    Route::get('/drivers-performance', [\App\Http\Controllers\DriverController::class, 'getPerformance']);
 });
 
