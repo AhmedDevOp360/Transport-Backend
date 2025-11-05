@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(php artisan:*)"
+      "Bash(php artisan:*)",
+      "Read(//c/Users/DevoOp 360/Downloads/**)"
     ],
     "deny": [],
     "ask": []

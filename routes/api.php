@@ -45,5 +45,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/drivers/{id}/unassign-vehicle', [\App\Http\Controllers\DriverController::class, 'unassignVehicle']);
     Route::get('/drivers-alerts', [\App\Http\Controllers\DriverController::class, 'getAlerts']);
     Route::get('/drivers-performance', [\App\Http\Controllers\DriverController::class, 'getPerformance']);
+
+    // Vehicle Management Routes
+    Route::get('/vehicles', [\App\Http\Controllers\VehicleController::class, 'index']);
+    Route::post('/vehicles', [\App\Http\Controllers\VehicleController::class, 'store']);
+    Route::get('/vehicles/{id}', [\App\Http\Controllers\VehicleController::class, 'show']);
+    Route::post('/vehicles/{id}', [\App\Http\Controllers\VehicleController::class, 'update']);
+    Route::delete('/vehicles/{id}', [\App\Http\Controllers\VehicleController::class, 'destroy']);
+    Route::post('/vehicles/{id}/status', [\App\Http\Controllers\VehicleController::class, 'updateStatus']);
+    Route::get('/vehicles-alerts', [\App\Http\Controllers\VehicleController::class, 'getAlerts']);
+    Route::get('/vehicles-performance', [\App\Http\Controllers\VehicleController::class, 'getPerformance']);
 });
 
