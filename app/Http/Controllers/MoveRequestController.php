@@ -5,9 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreMoveRequestRequest;
 use App\Models\MoveRequest;
 use App\Models\MoveRequestApplication;
-use Illuminate\Container\Attributes\Auth;
+use App\Models\Driver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -15,9 +16,14 @@ class MoveRequestController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can view move requests.',
+            ], 403);
+        }
         try {
-            $query = MoveRequest::where('user_id', auth()->id())
-                ->with('items');
+            $query = MoveRequest::with('items')->where('status', 'pending');
 
             // Search filter - searches in move_title, move_type, and description
             if ($request->has('search') && !empty($request->search)) {
@@ -53,14 +59,17 @@ class MoveRequestController extends Controller
             }
 
             $moveRequests = $query->orderBy('created_at', 'desc')->get();
+            $myRequests = MoveRequest::whereHas('applications', function ($q) {
+                $q->where('status', 'accepted')->where('user_id', Auth::id());
+            })->orderBy('created_at', 'desc');
 
             $data = [
-                'total_requests' => $moveRequests->count(),
+                'total_requests' => $myRequests->count(),
                 'total_pending_requests' => $moveRequests->where('status', 'pending')->count(),
-                'total_confirmed_requests' => $moveRequests->where('status', 'confirmed')->count(),
-                'total_in_progress_requests' => $moveRequests->where('status', 'in-progress')->count(),
-                'total_completed_requests' => $moveRequests->where('status', 'completed')->count(),
-                'total_rejected_requests' => $moveRequests->where('status', 'rejected')->count(),
+                'total_confirmed_requests' => $myRequests->where('status', 'confirmed')->count(),
+                'total_in_progress_requests' => $myRequests->where('status', 'in-progress')->count(),
+                'total_completed_requests' => $myRequests->where('status', 'completed')->count(),
+                'total_rejected_requests' => $myRequests->where('status', 'rejected')->count(),
                 'move_requests' => $moveRequests
             ];
 
@@ -80,6 +89,12 @@ class MoveRequestController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'customer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only customer can create move requests.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             // 'user_id' => 'required|exists:users,id',
             'move_type' => 'required|string|max:255',
@@ -111,7 +126,7 @@ class MoveRequestController extends Controller
             DB::beginTransaction();
 
             $moveRequest = MoveRequest::create([
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),
                 'move_type' => $request->move_type,
                 'vehicle_type' => $request->vehicle_type,
                 'move_title' => $request->move_title,
@@ -154,6 +169,12 @@ class MoveRequestController extends Controller
 
     public function apply(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can apply for move requests.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             // 'user_id' => 'required|exists:users,id',
             'offered_price' => 'required|numeric|min:0',
@@ -188,7 +209,7 @@ class MoveRequestController extends Controller
 
             // Check if user has already applied
             $existingApplication = MoveRequestApplication::where('move_request_id', $id)
-                ->where('user_id', auth()->id())
+                ->where('user_id', Auth::id())
                 ->first();
 
             if ($existingApplication) {
@@ -201,7 +222,7 @@ class MoveRequestController extends Controller
             // Create the application
             $application = MoveRequestApplication::create([
                 'move_request_id' => $id,
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),
                 'offered_price' => $request->offered_price,
                 'delivery_time' => $request->delivery_time,
                 'message' => $request->message,
@@ -225,7 +246,6 @@ class MoveRequestController extends Controller
                 'message' => 'Application submitted successfully',
                 'data' => $application->load('user', 'moveRequest', 'services'),
             ], 201);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -265,7 +285,7 @@ class MoveRequestController extends Controller
             }
 
             // Check if the authenticated user is the owner of the move request
-            if ($moveRequest->user_id !== auth()->id()) {
+            if ($moveRequest->user_id !== Auth::id()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. You can only update applications for your own move requests.',
@@ -284,7 +304,7 @@ class MoveRequestController extends Controller
                 ], 404);
             }
 
-            if($application->status !== 'pending') {
+            if ($application->status !== 'pending') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Application status has already been updated',
@@ -294,6 +314,12 @@ class MoveRequestController extends Controller
             $status = $request->status;
 
             if ($status === 'accepted') {
+                if (Auth::user()->user_type !== 'customer') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized. Only customer can accept applications.',
+                    ], 403);
+                }
                 // Update the application to accepted
                 $application->update(['status' => 'accepted']);
 
@@ -321,7 +347,6 @@ class MoveRequestController extends Controller
                 'message' => $message,
                 'data' => $application->fresh()->load('user', 'moveRequest', 'services'),
             ], 200);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -335,6 +360,12 @@ class MoveRequestController extends Controller
 
     public function listApplications($id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'customer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only customers can view applications for their move requests.',
+            ], 403);
+        }
         try {
             // Check if move request exists
             $moveRequest = MoveRequest::find($id);
@@ -347,10 +378,19 @@ class MoveRequestController extends Controller
             }
 
             // Check if the authenticated user is the owner of the move request
-            if ($moveRequest->user_id !== auth()->id()) {
+            if ($moveRequest->user_id !== Auth::id()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. You can only view applications for your own move requests.',
+                ], 403);
+            }
+
+            $hasPending = $moveRequest->applications()->where('status', 'pending')->exists();
+
+            if (!$hasPending) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This move request is already assigned.',
                 ], 403);
             }
 
@@ -373,7 +413,6 @@ class MoveRequestController extends Controller
                 'message' => 'Applications retrieved successfully',
                 'data' => $data,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -397,7 +436,7 @@ class MoveRequestController extends Controller
             }
 
             // Check if the authenticated user is the owner of the move request
-            if ($moveRequest->user_id !== auth()->id()) {
+            if ($moveRequest->user_id !== Auth::id()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. You can only view applications for your own move requests.',
@@ -422,7 +461,6 @@ class MoveRequestController extends Controller
                 'message' => 'Application retrieved successfully',
                 'data' => $application,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -434,6 +472,13 @@ class MoveRequestController extends Controller
 
     public function updateApplication(Request $request, $id, $application_id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can update applications.',
+            ], 403);
+        }
+
         $validate = Validator::make($request->all(), [
             'offered_price' => 'nullable|numeric|min:0',
             'delivery_time' => 'nullable|string|max:100',
@@ -479,7 +524,7 @@ class MoveRequestController extends Controller
             }
 
             // Check if the authenticated user is the owner of the application
-            if ($application->user_id !== auth()->id()) {
+            if ($application->user_id !== Auth::id()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. You can only update your own applications.',
@@ -539,7 +584,6 @@ class MoveRequestController extends Controller
                 'message' => 'Application updated successfully',
                 'data' => $application->fresh()->load('user', 'moveRequest', 'services'),
             ], 200);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -553,6 +597,13 @@ class MoveRequestController extends Controller
 
     public function applicationDetail($id, $application_id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'customer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only customers can view application details.',
+            ], 403);
+        }
+
         try {
             // Check if move request exists
             $moveRequest = MoveRequest::find($id);
@@ -565,7 +616,7 @@ class MoveRequestController extends Controller
             }
 
             // Check if the authenticated user is the owner of the move request
-            if ($moveRequest->user_id !== auth()->id()) {
+            if ($moveRequest->user_id !== Auth::id()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. You can only view applications for your own move requests.',
@@ -657,7 +708,6 @@ class MoveRequestController extends Controller
                 'message' => 'Application details retrieved successfully',
                 'data' => $data,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -669,9 +719,16 @@ class MoveRequestController extends Controller
 
     public function activeJobs(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can view active jobs.',
+            ], 403);
+        }
+
         try {
             // Get all accepted applications for the current provider
-            $query = MoveRequestApplication::where('user_id', auth()->id())
+            $query = MoveRequestApplication::where('user_id', Auth::id())
                 ->where('status', 'accepted')
                 ->with(['moveRequest.items', 'moveRequest.user', 'services']);
 
@@ -764,7 +821,6 @@ class MoveRequestController extends Controller
                 'message' => 'Active jobs retrieved successfully',
                 'data' => $data,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -776,6 +832,12 @@ class MoveRequestController extends Controller
 
     public function updateMoveRequestStatus(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can update move request status.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:pending,confirmed,in-progress,completed,rejected',
         ]);
@@ -801,7 +863,7 @@ class MoveRequestController extends Controller
 
             // Check if the authenticated user has an accepted application for this move request
             $acceptedApplication = MoveRequestApplication::where('move_request_id', $id)
-                ->where('user_id', auth()->id())
+                ->where('user_id', Auth::id())
                 ->where('status', 'accepted')
                 ->first();
 
@@ -820,11 +882,419 @@ class MoveRequestController extends Controller
                 'message' => 'Move request status updated successfully',
                 'data' => $moveRequest->fresh()->load('items'),
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update move request status',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function assignDriver(Request $request, $id): JsonResponse
+    {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can assign drivers to move requests.',
+            ], 403);
+        }
+
+        $validate = Validator::make($request->all(), [
+            'driver_id' => 'required|exists:drivers,id',
+        ]);
+
+        if ($validate->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation errors',
+                'errors' => $validate->errors(),
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Find the move request
+            $moveRequest = MoveRequest::find($id);
+
+            if (!$moveRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Move request not found',
+                ], 404);
+            }
+
+            // Check if the move request is confirmed
+            if ($moveRequest->status !== 'confirmed') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot assign driver. Move request must be in confirmed status.',
+                ], 400);
+            }
+
+            // Check if the authenticated provider has an accepted application for this move request
+            $acceptedApplication = MoveRequestApplication::where('move_request_id', $id)
+                ->where('user_id', Auth::id())
+                ->where('status', 'accepted')
+                ->first();
+
+            if (!$acceptedApplication) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. You can only assign drivers to move requests where your application has been accepted.',
+                ], 403);
+            }
+
+            // Verify that the driver belongs to the authenticated provider
+            $driver = Driver::where('id', $request->driver_id)
+                ->where('user_id', Auth::id())
+                ->first();
+
+            if (!$driver) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Driver not found or does not belong to your organization.',
+                ], 404);
+            }
+
+            // Check if driver is available
+            if ($driver->status !== 'available') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Driver is not available. Current status: ' . $driver->status,
+                ], 400);
+            }
+
+            // Check if a driver is already assigned
+            if ($moveRequest->driver_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'A driver has already been assigned to this move request.',
+                ], 409);
+            }
+
+            // Assign the driver to the move request
+            $moveRequest->update([
+                'driver_id' => $driver->id,
+                'status' => 'in-progress'
+            ]);
+
+            // Update driver status
+            $driver->update([
+                'status' => 'in-transit',
+                'job_assignment' => 'JOB-ID: #MV-' . $moveRequest->created_at->format('Y') . '-' . str_pad($moveRequest->id, 3, '0', STR_PAD_LEFT)
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Driver assigned successfully. Move request status updated to in-progress.',
+                'data' => [
+                    'move_request' => $moveRequest->fresh()->load(['items', 'driver', 'user']),
+                    'driver' => $driver->fresh(),
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to assign driver',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function activeMoves(Request $request): JsonResponse
+    {
+        if (Auth::user()->user_type !== 'customer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only customers can view their active moves.',
+            ], 403);
+        }
+
+        try {
+            // Single optimized query to get all necessary data
+            $allMoves = MoveRequest::where('user_id', Auth::id())
+                ->whereHas('applications', function ($q) {
+                    $q->where('status', 'accepted');
+                })
+                ->with(['applications' => function ($q) {
+                    $q->where('status', 'accepted')->select('id', 'move_request_id', 'user_id', 'offered_price', 'delivery_time', 'created_at')
+                        ->with(['user:id,name,email,phone,profile_image']);
+                }])
+                ->whereNotIn('status', ['rejected'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            // Use Carbon for date handling
+            $now = \Carbon\Carbon::now();
+            $thisMonthStart = $now->copy()->startOfMonth();
+            $lastMonthStart = $now->copy()->subMonth()->startOfMonth();
+            $lastMonthEnd = $now->copy()->subMonth()->endOfMonth();
+
+            // Separate moves by time periods
+            $currentMonthMoves = $allMoves->filter(function ($move) use ($thisMonthStart) {
+                return \Carbon\Carbon::parse($move->created_at)->gte($thisMonthStart);
+            });
+
+            $lastMonthMoves = $allMoves->filter(function ($move) use ($lastMonthStart, $lastMonthEnd) {
+                $createdAt = \Carbon\Carbon::parse($move->created_at);
+                return $createdAt->gte($lastMonthStart) && $createdAt->lte($lastMonthEnd);
+            });
+
+            // Calculate statistics from the single dataset
+            $totalActiveMoves = $allMoves->whereNotIn('status', ['completed'])->count();
+            $inProgressCount = $allMoves->where('status', 'in-progress')->count();
+            $completedThisMonth = $currentMonthMoves->where('status', 'completed')->count();
+
+            // Total spent calculation
+            $totalSpent = $allMoves->sum(function ($move) {
+                $acceptedApp = $move->applications->first();
+                return $acceptedApp ? $acceptedApp->offered_price : 0;
+            });
+
+            // Last month statistics
+            $lastMonthActiveMoves = $lastMonthMoves->whereNotIn('status', ['completed'])->count();
+            $lastMonthInProgress = $lastMonthMoves->where('status', 'in-progress')->count();
+            $lastMonthCompleted = $lastMonthMoves->where('status', 'completed')->count();
+            $lastMonthSpent = $lastMonthMoves->sum(function ($move) {
+                $acceptedApp = $move->applications->first();
+                return $acceptedApp ? $acceptedApp->offered_price : 0;
+            });
+
+            // Calculate changes
+            $activeMoveChange = $lastMonthActiveMoves > 0
+                ? round((($totalActiveMoves - $lastMonthActiveMoves) / $lastMonthActiveMoves) * 100, 1)
+                : 0;
+            $inProgressChange = $lastMonthInProgress > 0
+                ? round((($inProgressCount - $lastMonthInProgress) / $lastMonthInProgress) * 100, 1)
+                : 0;
+            $completedChange = $lastMonthCompleted > 0
+                ? round((($completedThisMonth - $lastMonthCompleted) / $lastMonthCompleted) * 100, 1)
+                : 0;
+            $spentChange = $lastMonthSpent > 0
+                ? round((($totalSpent - $lastMonthSpent) / $lastMonthSpent) * 100, 1)
+                : 0;
+
+            // Apply filters to display results
+            $filteredMoves = $allMoves;
+
+            if ($request->has('status') && !empty($request->status)) {
+                $status = $request->status;
+                if ($status === 'awaiting_pickup') {
+                    $filteredMoves = $allMoves->where('status', 'confirmed');
+                } elseif ($status === 'in_progress') {
+                    $filteredMoves = $allMoves->where('status', 'in-progress');
+                } elseif ($status === 'completed') {
+                    $filteredMoves = $allMoves->where('status', 'completed');
+                }
+            }
+
+            if ($request->has('search') && !empty($request->search)) {
+                $search = strtolower($request->search);
+                $filteredMoves = $filteredMoves->filter(function ($move) use ($search) {
+                    return stripos($move->move_title, $search) !== false ||
+                           stripos($move->move_type, $search) !== false ||
+                           stripos($move->pickup_address, $search) !== false ||
+                           stripos($move->drop_address, $search) !== false;
+                });
+            }
+
+            // Format move cards
+            $moveCards = $filteredMoves->map(function ($move) {
+                $acceptedApplication = $move->applications->first();
+                $provider = $acceptedApplication ? $acceptedApplication->user : null;
+
+                // Calculate progress
+                $progress = match ($move->status) {
+                    'confirmed' => 25,
+                    'in-progress' => 60,
+                    'completed' => 100,
+                    default => 0
+                };
+
+                // Map status
+                $displayStatus = match ($move->status) {
+                    'confirmed' => 'awaiting_pickup',
+                    'in-progress' => 'in_progress',
+                    'completed' => 'delivered',
+                    default => $move->status
+                };
+
+                return [
+                    'move_id' => '#MOV-' . \Carbon\Carbon::parse($move->created_at)->format('Y') . '-' . str_pad($move->id, 4, '0', STR_PAD_LEFT),
+                    'move_request_id' => $move->id,
+                    'move_title' => $move->move_title,
+                    'status' => $displayStatus,
+                    'provider' => $provider ? [
+                        'name' => $provider->name,
+                        'profile_image' => $provider->profile_image,
+                        'rating' => 4.5,
+                    ] : null,
+                    'route' => [
+                        'from' => $move->pickup_address,
+                        'to' => $move->drop_address,
+                    ],
+                    'scheduled_date' => $move->move_date,
+                    'delivery_date' => $move->estimated_delivery_date,
+                    'progress' => $progress,
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Active moves retrieved successfully',
+                'data' => [
+                    'statistics' => [
+                        'total_active_moves' => [
+                            'count' => $totalActiveMoves,
+                            'change_from_last_month' => $activeMoveChange,
+                        ],
+                        'in_progress' => [
+                            'count' => $inProgressCount,
+                            'change_this_week' => $inProgressChange,
+                        ],
+                        'completed_this_month' => [
+                            'count' => $completedThisMonth,
+                            'change_from_last_month' => $completedChange,
+                        ],
+                        'total_spent' => [
+                            'amount' => $totalSpent,
+                            'change_from_last_month' => $spentChange,
+                        ],
+                    ],
+                    'moves' => $moveCards,
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve active moves',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function moveHistory(Request $request): JsonResponse
+    {
+        if (Auth::user()->user_type !== 'customer') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only customers can view their move history.',
+            ], 403);
+        }
+
+        try {
+            // Single optimized query - get completed, cancelled, and archived moves
+            $query = MoveRequest::where('user_id', Auth::id())
+                ->whereHas('applications', function ($q) {
+                    $q->where('status', 'accepted');
+                })
+                ->with(['applications' => function ($q) {
+                    $q->where('status', 'accepted')->select('id', 'move_request_id', 'user_id', 'offered_price')
+                        ->with(['user:id,name']);
+                }])
+                ->whereIn('status', ['completed', 'rejected'])
+                ->select('id', 'user_id', 'move_title', 'move_type', 'pickup_address', 'drop_address', 'move_date', 'status', 'created_at', 'updated_at');
+
+            // Filter by move type
+            if ($request->has('move_type') && $request->move_type !== 'all') {
+                $query->where('move_type', $request->move_type);
+            }
+
+            // Filter by status
+            if ($request->has('status') && $request->status !== 'all') {
+                if ($request->status === 'completed') {
+                    $query->where('status', 'completed');
+                } elseif ($request->status === 'cancelled') {
+                    $query->where('status', 'rejected');
+                }
+            }
+
+            // Sort
+            $sortBy = $request->get('sort', 'recent');
+            if ($sortBy === 'recent') {
+                $query->orderBy('updated_at', 'desc');
+            } elseif ($sortBy === 'oldest') {
+                $query->orderBy('updated_at', 'asc');
+            }
+
+            // Pagination
+            $perPage = $request->get('per_page', 10);
+            $allHistory = $query->paginate($perPage);
+
+            // Calculate statistics (from all history, not just current page)
+            $allMoves = MoveRequest::where('user_id', Auth::id())
+                ->whereHas('applications', function ($q) {
+                    $q->where('status', 'accepted');
+                })
+                ->with(['applications' => function ($q) {
+                    $q->where('status', 'accepted')->select('id', 'move_request_id', 'offered_price');
+                }])
+                ->select('id', 'status', 'created_at')
+                ->get();
+
+            $totalCompleted = $allMoves->where('status', 'completed')->count();
+            $totalCancelled = $allMoves->where('status', 'rejected')->count();
+            $totalSpent = $allMoves->where('status', 'completed')->sum(function ($move) {
+                $acceptedApp = $move->applications->first();
+                return $acceptedApp ? $acceptedApp->offered_price : 0;
+            });
+
+            // Calculate average rating (placeholder - you would calculate from a ratings table)
+            $averageRating = 4.5;
+
+            // Format history items
+            $historyItems = $allHistory->map(function ($move) {
+                $acceptedApplication = $move->applications->first();
+                $provider = $acceptedApplication ? $acceptedApplication->user : null;
+
+                return [
+                    'move_id' => '#MOV-' . str_pad($move->id, 4, '0', STR_PAD_LEFT),
+                    'move_request_id' => $move->id,
+                    'type' => $move->move_title,
+                    'provider' => $provider ? $provider->name : 'N/A',
+                    'route' => $move->pickup_address . ' → ' . $move->drop_address,
+                    'date' => \Carbon\Carbon::parse($move->updated_at)->format('d M Y'),
+                    'cost' => $acceptedApplication ? $acceptedApplication->offered_price : 0,
+                    'status' => match ($move->status) {
+                        'completed' => 'completed',
+                        'rejected' => 'cancelled',
+                        default => 'archived'
+                    },
+                    'rating' => $move->status === 'completed' ? 4.5 : null,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Move history retrieved successfully',
+                'data' => [
+                    'statistics' => [
+                        'total_completed' => $totalCompleted,
+                        'total_spent' => $totalSpent,
+                        'cancelled_moves' => $totalCancelled,
+                        'average_rating' => $averageRating,
+                    ],
+                    'history' => $historyItems,
+                    'pagination' => [
+                        'current_page' => $allHistory->currentPage(),
+                        'total_pages' => $allHistory->lastPage(),
+                        'per_page' => $allHistory->perPage(),
+                        'total' => $allHistory->total(),
+                        'from' => $allHistory->firstItem(),
+                        'to' => $allHistory->lastItem(),
+                    ],
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve move history',
                 'error' => $e->getMessage(),
             ], 500);
         }

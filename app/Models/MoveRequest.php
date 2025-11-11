@@ -10,6 +10,7 @@ class MoveRequest extends Model
 {
     protected $fillable = [
         'user_id',
+        'driver_id',
         'move_type',
         'vehicle_type',
         'move_title',
@@ -41,5 +42,15 @@ class MoveRequest extends Model
     public function items(): HasMany
     {
         return $this->hasMany(MoveRequestItem::class);
+    }
+
+    public function applications(): HasMany
+    {
+        return $this->hasMany(MoveRequestApplication::class);
+    }
+
+    public function driver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class);
     }
 }

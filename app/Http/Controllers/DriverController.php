@@ -6,6 +6,7 @@ use App\Models\Driver;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -13,6 +14,12 @@ class DriverController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $query = Driver::with(['user']);
 
@@ -39,7 +46,7 @@ class DriverController extends Controller
             $totalDrivers = $drivers->count();
             $completedToday = $drivers->sum('completed_jobs');
             $activeJobs = $drivers->where('status', 'active')->count() +
-                         $drivers->where('status', 'in-transit')->count();
+                $drivers->where('status', 'in-transit')->count();
 
             // Calculate completion rate
             $totalJobs = $drivers->sum('completed_jobs');
@@ -81,7 +88,6 @@ class DriverController extends Controller
                 'message' => 'Drivers retrieved successfully',
                 'data' => $data,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -93,6 +99,12 @@ class DriverController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
             'team_name' => 'required|string|max:255',
@@ -129,7 +141,6 @@ class DriverController extends Controller
                 'message' => 'Driver created successfully',
                 'data' => $driver->load('user'),
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -141,6 +152,12 @@ class DriverController extends Controller
 
     public function show($id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $driver = Driver::with(['user', 'assignedVehicle'])->find($id);
 
@@ -190,7 +207,6 @@ class DriverController extends Controller
                 'message' => 'Driver details retrieved successfully',
                 'data' => $data,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -202,6 +218,12 @@ class DriverController extends Controller
 
     public function update(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'user_id' => 'nullable|exists:users,id',
             'team_name' => 'nullable|string|max:255',
@@ -247,7 +269,6 @@ class DriverController extends Controller
                 'message' => 'Driver updated successfully',
                 'data' => $driver->fresh()->load('user'),
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -259,6 +280,12 @@ class DriverController extends Controller
 
     public function updateStatus(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:active,in-transit,on-break,available',
         ]);
@@ -288,7 +315,6 @@ class DriverController extends Controller
                 'message' => 'Driver status updated successfully',
                 'data' => $driver->fresh()->load('user'),
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -300,6 +326,12 @@ class DriverController extends Controller
 
     public function destroy($id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $driver = Driver::find($id);
 
@@ -316,7 +348,6 @@ class DriverController extends Controller
                 'success' => true,
                 'message' => 'Driver deleted successfully',
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -328,6 +359,12 @@ class DriverController extends Controller
 
     public function getAlerts(): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $alerts = [];
 
@@ -375,7 +412,6 @@ class DriverController extends Controller
                     'alerts' => $alerts,
                 ],
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -387,6 +423,12 @@ class DriverController extends Controller
 
     public function getPerformance(): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $drivers = Driver::with('user')->get();
 
@@ -402,7 +444,6 @@ class DriverController extends Controller
                 'message' => 'Driver performance retrieved successfully',
                 'data' => $performance,
             ], 200);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -414,6 +455,12 @@ class DriverController extends Controller
 
     public function assignVehicle(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'vehicle_id' => 'required|exists:vehicles,id',
         ]);
@@ -468,7 +515,6 @@ class DriverController extends Controller
                 'message' => 'Vehicle assigned successfully',
                 'data' => $driver->fresh()->load(['assignedVehicle', 'user']),
             ], 200);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -482,6 +528,12 @@ class DriverController extends Controller
 
     public function unassignVehicle($id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             DB::beginTransaction();
 
@@ -519,7 +571,6 @@ class DriverController extends Controller
                 'message' => 'Vehicle unassigned successfully',
                 'data' => $driver->fresh()->load('user'),
             ], 200);
-
         } catch (\Exception $e) {
             DB::rollBack();
 

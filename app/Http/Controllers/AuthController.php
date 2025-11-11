@@ -64,6 +64,7 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'identifier' => 'required|string',
             'password' => 'required|string|min:8',
+            'user_type' => 'required|string|in:customer,provider',
         ]);
 
         if ($validator->fails()) {
@@ -104,6 +105,7 @@ class AuthController extends Controller
         $userData = [
             'name' => $request->name,
             'password' => Hash::make($request->password),
+            'user_type' => $request->user_type,
             'otp' => $otp,
             'otp_expires_at' => $otpExpiresAt,
             'is_verified' => false,
@@ -131,6 +133,7 @@ class AuthController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone' => $user->phone,
+                    'user_type' => $user->user_type,
                     'is_verified' => $user->is_verified,
                 ],
                 'verification_type' => $isEmail ? 'email' : 'sms',
@@ -196,6 +199,7 @@ class AuthController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone' => $user->phone,
+                    'user_type' => $user->user_type,
                     'is_verified' => $user->is_verified,
                 ],
                 'token' => $token,
@@ -340,6 +344,7 @@ class AuthController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone' => $user->phone,
+                    'user_type' => $user->user_type,
                     'is_verified' => $user->is_verified,
                 ],
                 'token' => $token,

@@ -26,6 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/move-requests', [MoveRequestController::class, 'store']);
     Route::post('/move-requests/{id}/apply', [MoveRequestController::class, 'apply']);
     Route::post('/move-requests/{id}/status', [MoveRequestController::class, 'updateMoveRequestStatus']);
+    Route::post('/move-requests/{id}/assign', [MoveRequestController::class, 'assignDriver']);
     Route::get('/move-requests/{id}/applications', [MoveRequestController::class, 'listApplications']);
     Route::get('/move-requests/{id}/applications/{application_id}', [MoveRequestController::class, 'viewApplication']);
     Route::get('/move-requests/{id}/applications/{application_id}/detail', [MoveRequestController::class, 'applicationDetail']);
@@ -33,6 +34,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/move-requests/{id}/applications/{application_id}/status', [MoveRequestController::class, 'updateApplicationStatus']);
 
     Route::get('/active-jobs', [MoveRequestController::class, 'activeJobs']);
+    Route::get('/active-moves', [MoveRequestController::class, 'activeMoves']);
+    Route::get('/move-history', [MoveRequestController::class, 'moveHistory']);
 
     // Driver/Team Management Routes
     Route::get('/drivers', [\App\Http\Controllers\DriverController::class, 'index']);

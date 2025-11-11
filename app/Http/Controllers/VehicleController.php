@@ -6,6 +6,7 @@ use App\Models\Vehicle;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -13,6 +14,12 @@ class VehicleController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $query = Vehicle::with(['user']);
 
@@ -102,6 +109,12 @@ class VehicleController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
             'vehicle_id' => 'nullable|string|unique:vehicles,vehicle_id',
@@ -179,6 +192,12 @@ class VehicleController extends Controller
 
     public function show($id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $vehicle = Vehicle::with(['user'])->find($id);
 
@@ -233,6 +252,12 @@ class VehicleController extends Controller
 
     public function update(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'user_id' => 'nullable|exists:users,id',
             'vehicle_id' => 'nullable|string|unique:vehicles,vehicle_id,' . $id,
@@ -321,6 +346,12 @@ class VehicleController extends Controller
 
     public function updateStatus(Request $request, $id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         $validate = Validator::make($request->all(), [
             'status' => 'required|in:available,in-use,maintenance,retired',
         ]);
@@ -368,6 +399,12 @@ class VehicleController extends Controller
 
     public function destroy($id): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $vehicle = Vehicle::find($id);
 
@@ -401,6 +438,12 @@ class VehicleController extends Controller
 
     public function getAlerts(): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $alerts = [];
 
@@ -452,6 +495,12 @@ class VehicleController extends Controller
 
     public function getPerformance(): JsonResponse
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         try {
             $vehicles = Vehicle::all();
 
@@ -491,6 +540,12 @@ class VehicleController extends Controller
      */
     private function generateVehicleId($type): string
     {
+        if (Auth::user()->user_type !== 'provider') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only providers can access this request.',
+            ], 403);
+        }
         // Extract initials from type (e.g., "Medium Truck" -> "MT")
         $words = explode(' ', $type);
         $prefix = '';
